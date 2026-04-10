@@ -14,6 +14,7 @@ import {
   Download,
   Eye,
   FileCode2,
+  FileText,
   Info,
   Loader2,
   MapPin,
@@ -144,7 +145,16 @@ export default function ProjectDetail() {
             <Building2 className="w-4 h-4 text-primary" />
             <span className="font-semibold text-foreground">{project.name}</span>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate(`/projects/${projectId}/permit-set`)}
+              className="gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Permit Set
+            </Button>
             <Button
               size="sm"
               onClick={() => navigate(`/projects/${projectId}/viewer`)}

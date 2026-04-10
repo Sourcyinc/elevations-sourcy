@@ -722,13 +722,82 @@ CRITICAL: NEVER say "I need more information" or "please provide" — just build
     }),
 });
 
-// ─── App Router ───────────────────────────────────────────────────────────────
+// ─── Blender 3D Router ─────────────────────────────────────────────────────────
+import { execSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
+const blenderRouter = router({
+  generateGLB: protectedProcedure
+    .input(z.object({ projectId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const isMember = await isProjectMember(input.projectId, ctx.user.id);
+      const project = await getProjectById(input.projectId);
+      if (!isMember && project?.ownerId !== ctx.user.id)
+        throw new TRPCError({ code: "FORBIDDEN" });
+
+      const elements = await getIfcElementsByProject(input.projectId);
+      if (!elements || elements.length === 0)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No elements to render" });
+
+      // Build element JSON for Blender
+      const elemData = elements.map((e) => ({
+        id: e.id,
+        ifcClass: e.ifcClass,
+        name: e.name,
+        posX: e.positionX ?? 0,
+        posY: e.positionY ?? 0,
+        posZ: e.positionZ ?? 0,
+        width: e.width ?? 1,
+        height: e.height ?? 1,
+        depth: e.depth ?? 1,
+        rotation: 0,
+      }));
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "elev-blender-"));
+      const inputJson = path.join(tmpDir, "elements.json");
+      const outputObj = path.join(tmpDir, "model.obj");
+      const outputGlb = path.join(tmpDir, "model.glb");
+
+      fs.writeFileSync(inputJson, JSON.stringify({ projectName: project?.name ?? "Model", elements: elemData }));
+
+      const scriptPath = path.join(process.cwd(), "server", "blender_ifc_to_glb.py");
+
+      try {
+        // Run Blender headless to generate OBJ
+        execSync(
+          `blender --background --python "${scriptPath}" -- "${inputJson}" "${outputObj}"`,
+          { timeout: 120000, stdio: "pipe" }
+        );
+
+        // Convert OBJ to GLB using obj2gltf
+        execSync(`obj2gltf -i "${outputObj}" -o "${outputGlb}"`, { timeout: 30000, stdio: "pipe" });
+
+        // Upload GLB to S3
+        const glbBuffer = fs.readFileSync(outputGlb);
+        const key = `glb/${input.projectId}-${Date.now()}.glb`;
+        const { url } = await storagePut(key, glbBuffer, "model/gltf-binary");
+
+        // Cleanup
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+
+        return { url, elementCount: elements.length };
+      } catch (err: unknown) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Blender render failed: ${msg.slice(0, 200)}` });
+      }
+    }),
+});
+
+// ─── App Router ───────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   projects: projectsRouter,
   ifc: ifcRouter,
+  blender: blenderRouter,
   compliance: complianceRouter,
   schedules: schedulesRouter,
   ai: aiRouter,

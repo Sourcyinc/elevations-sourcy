@@ -91,17 +91,32 @@ function Hero({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
     <section
       className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-16"
-      style={{
-        background:
-          "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(23,238,180,0.13) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 85% 60%, rgba(33,148,242,0.09) 0%, transparent 50%), #020617",
-      }}
+      style={{ background: "#020617" }}
     >
-      {/* Dot grid */}
+      {/* Video background */}
+      <video
+        className="absolute inset-0 w-full h-full object-cover"
+        src="https://d2xsxph8kpxj0f.cloudfront.net/310519663412862458/aeHAj7eMfNRRx2t46XKsZJ/hero-bg_df13f8bf.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        style={{ opacity: 0.55 }}
+      />
+      {/* Dark overlay with brand gradient tint */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
+          background:
+            "linear-gradient(to bottom, rgba(2,6,23,0.35) 0%, rgba(2,6,23,0.15) 40%, rgba(2,6,23,0.55) 80%, #020617 100%)",
+        }}
+      />
+      {/* Subtle brand color overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 40% at 50% 0%, rgba(23,238,180,0.08) 0%, transparent 60%)",
         }}
       />
 

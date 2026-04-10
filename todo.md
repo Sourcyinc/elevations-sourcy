@@ -70,6 +70,29 @@
 - [x] Footer with links, Sourcy brand, and legal disclaimer
 - [x] Authenticated users redirected to dashboard automatically
 
+## Headless Blender + Three.js 3D Viewer
+- [x] Install Blender headless on backend server (Blender 3.0.1 via apt)
+- [x] Write Blender Python script: IFC JSON → 3D mesh geometry → OBJ → GLB (via obj2gltf)
+- [x] Add tRPC endpoint: blender.generateGLB — runs Blender subprocess, uploads GLB to S3, returns URL
+- [x] Install Three.js + @react-three/fiber + @react-three/drei in frontend
+- [x] Add Three.js GLBViewer3D component (lazy-loaded) alongside schematic canvas
+- [x] Add GLB loading state, OrbitControls, shadow lighting, ground grid
+- [x] Add per-element color coding and ghost-state transparency in Three.js scene
+- [x] Add "Re-render 3D" button to trigger GLB rebuild after model changes
+- [x] 3-way toggle: Schematic (fast, always available) / 3D Model (Blender GLB) / 2D Plan (FloorPlan2D)
+- [x] Schematic view: always available, fast, good for element editing and detail work
+- [x] 3D Model view: Blender GLB rendered in Three.js, triggered on demand with loading state
+- [x] 2D Plan view: architectural top-down canvas renderer (FloorPlan2D component)
+
+## Video Hero & 2D/Permit Set
+- [x] Upload hero video to CDN and wire as autoplay muted loop background in landing page hero
+- [x] Build 2D floor plan renderer: canvas-based top-down view from IFC element coordinates
+- [x] Add 3-way view mode toggle in Viewer toolbar: Schematic / 3D Model / 2D Plan
+- [x] Build Permit Document Set page: 9 sheets (cover, floor plan, site plan, 4 elevations, foundation, FBC summary)
+- [x] Title block editor: project name, address, designer, date, sheet number, revision, logo upload, engineer stamp
+- [x] Export permit set as PDF (browser print dialog → Save as PDF)
+- [x] Sheet navigation: previous/next sheet controls + add custom sheet button
+
 ## AI Overhaul
 - [x] Redesign AI system prompt: act as proactive BIM architect, generate full models immediately, never ask questions
 - [x] Add smart defaults engine: standard room dimensions, ceiling heights, wall thickness, door/window sizes by building type

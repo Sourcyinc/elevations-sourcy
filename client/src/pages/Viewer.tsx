@@ -22,10 +22,18 @@ import {
   Send,
   Shield,
   X,
+  Box,
+  LayoutGrid,
+  Map,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
+import FloorPlan2D from "@/components/FloorPlan2D";
+
+const GLBViewer3D = lazy(() => import("@/components/GLBViewer3D"));
+
+type ViewMode = "schematic" | "3d" | "2d";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1150,6 +1158,26 @@ export default function Viewer() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rightPanel, setRightPanel] = useState<"compliance" | "ai" | "schedules">("compliance");
+  const [viewMode, setViewMode] = useState<ViewMode>("schematic");
+  const [glbUrl, setGlbUrl] = useState<string | null>(null);
+  const [isGeneratingGlb, setIsGeneratingGlb] = useState(false);
+
+  const generateGlbMutation = trpc.blender.generateGLB.useMutation({
+    onSuccess: (data) => {
+      setGlbUrl(data.url);
+      setIsGeneratingGlb(false);
+      toast.success(`3D model rendered — ${data.elementCount} elements`);
+    },
+    onError: (err) => {
+      setIsGeneratingGlb(false);
+      toast.error(`Render failed: ${err.message}`);
+    },
+  });
+
+  const handleGenerateGlb = () => {
+    setIsGeneratingGlb(true);
+    generateGlbMutation.mutate({ projectId });
+  };
 
   const { data: project } = trpc.projects.get.useQuery(
     { id: projectId },
@@ -1200,6 +1228,32 @@ export default function Viewer() {
           </span>
         )}
 
+        {/* View mode toggle */}
+        <div className="flex items-center gap-0.5 ml-4 p-0.5 rounded" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          {(["schematic", "3d", "2d"] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => {
+                setViewMode(mode);
+                if (mode === "3d" && !glbUrl && !isGeneratingGlb && typedElements.length > 0) {
+                  handleGenerateGlb();
+                }
+              }}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-all ${
+                viewMode === mode
+                  ? "text-primary font-medium"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              style={viewMode === mode ? { background: "rgba(23,238,180,0.15)" } : {}}
+            >
+              {mode === "schematic" && <LayoutGrid className="w-3 h-3" />}
+              {mode === "3d" && <Box className="w-3 h-3" />}
+              {mode === "2d" && <Map className="w-3 h-3" />}
+              {mode === "schematic" ? "Schematic" : mode === "3d" ? "3D Model" : "2D Plan"}
+            </button>
+          ))}
+        </div>
+
         {/* Right panel toggle */}
         <div className="ml-auto flex items-center gap-1">
           {(["compliance", "ai", "schedules"] as const).map((panel) => (
@@ -1232,13 +1286,48 @@ export default function Viewer() {
           />
         </div>
 
-        {/* Center: 3D Viewer */}
+        {/* Center: View Canvas */}
         <div className="flex-1 overflow-hidden relative">
-          <IFCViewer3D
-            elements={typedElements}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+          {viewMode === "schematic" && (
+            <IFCViewer3D
+              elements={typedElements}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          )}
+          {viewMode === "3d" && (
+            <Suspense fallback={
+              <div className="w-full h-full flex items-center justify-center" style={{ background: "#0a0f1e" }}>
+                <Loader2 className="animate-spin" style={{ color: "#17eeb4" }} />
+              </div>
+            }>
+              <GLBViewer3D
+                glbUrl={glbUrl}
+                isGenerating={isGeneratingGlb}
+                onRegenerate={handleGenerateGlb}
+                elementCount={typedElements.length}
+              />
+            </Suspense>
+          )}
+          {viewMode === "2d" && (
+            <FloorPlan2D
+              elements={typedElements.map((e) => ({
+                id: e.id,
+                ifcClass: e.ifcClass,
+                name: e.name,
+                posX: e.positionX ?? null,
+                posY: e.positionY ?? null,
+                posZ: e.positionZ ?? null,
+                width: e.width,
+                height: e.height,
+                depth: e.depth,
+                rotation: null,
+                isGhost: e.isGhost,
+              }))}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          )}
         </div>
 
         {/* Right: Inspector or panel */}
