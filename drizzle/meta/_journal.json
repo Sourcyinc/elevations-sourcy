@@ -1,5 +1,27 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1775820219012,
+      "tag": "0000_condemned_prowler",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1775820391351,
+      "tag": "0001_keen_black_cat",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775820524273,
+      "tag": "0002_outstanding_betty_ross",
+      "breakpoints": true
+    }
+  ]
 }

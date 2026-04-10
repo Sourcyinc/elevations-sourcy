@@ -1,0 +1,1 @@
+ALTER TABLE `fbc_rules` MODIFY COLUMN `unit` varchar(60);
