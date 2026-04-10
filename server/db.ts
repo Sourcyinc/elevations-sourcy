@@ -116,7 +116,8 @@ export async function createProject(data: Omit<Project, "id" | "createdAt" | "up
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(projects).values(data);
-  const insertId = (result as unknown as { insertId: number }).insertId;
+  const raw = result as unknown as [{ insertId: number }, unknown];
+  const insertId = Array.isArray(raw) ? raw[0].insertId : (raw as unknown as { insertId: number }).insertId;
   // Auto-add owner as member
   await db.insert(projectMembers).values({ projectId: insertId, userId: data.ownerId, memberRole: "owner" });
   return insertId;
@@ -163,7 +164,8 @@ export async function createIfcFile(data: Omit<IfcFile, "id" | "createdAt">) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(ifcFiles).values(data);
-  return (result as unknown as { insertId: number }).insertId;
+  const raw = result as unknown as [{ insertId: number }, unknown];
+  return Array.isArray(raw) ? raw[0].insertId : (raw as unknown as { insertId: number }).insertId;
 }
 
 export async function getIfcFilesByProject(projectId: number): Promise<IfcFile[]> {
@@ -191,7 +193,8 @@ export async function createIfcElement(data: InsertIfcElement) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(ifcElements).values(data);
-  return (result as unknown as { insertId: number }).insertId;
+  const raw = result as unknown as [{ insertId: number }, unknown];
+  return Array.isArray(raw) ? raw[0].insertId : (raw as unknown as { insertId: number }).insertId;
 }
 
 export async function getIfcElementsByProject(projectId: number, includeGhost = false): Promise<IfcElement[]> {
@@ -272,7 +275,8 @@ export async function createAiSession(data: Omit<AiSession, "id" | "createdAt" |
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(aiSessions).values(data);
-  return (result as unknown as { insertId: number }).insertId;
+  const raw = result as unknown as [{ insertId: number }, unknown];
+  return Array.isArray(raw) ? raw[0].insertId : (raw as unknown as { insertId: number }).insertId;
 }
 
 export async function getAiSessionById(id: number): Promise<AiSession | undefined> {

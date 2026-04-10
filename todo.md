@@ -70,6 +70,9 @@
 - [x] Footer with links, Sourcy brand, and legal disclaimer
 - [x] Authenticated users redirected to dashboard automatically
 
+## Bug Fixes
+- [x] Fix: project_members insert fails on project creation — fixed insertId extraction from MySQL2 result tuple (result[0].insertId instead of result.insertId)
+
 ## Testing
 - [x] Vitest: auth.logout procedure
 - [x] Vitest: FBC compliance engine (21 tests — all passing)
