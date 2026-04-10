@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// ─── Shared test data ─────────────────────────────────────────────────────────
+// --- Shared test data ---------------------------------------------------------
 
 const MOCK_PROJECT = {
   id: 1,
@@ -75,7 +75,7 @@ const MOCK_WINDOW = {
   updatedAt: new Date("2024-01-01"),
 };
 
-// ─── Mock the database module ─────────────────────────────────────────────────
+// --- Mock the database module -------------------------------------------------
 
 vi.mock("./db", () => ({
   getDb: vi.fn(),
@@ -177,7 +177,7 @@ vi.mock("./db", () => ({
 
 import * as db from "./db";
 
-// ─── Mock context factory ─────────────────────────────────────────────────────
+// --- Mock context factory -----------------------------------------------------
 
 function makeCtx(userId = 1, role: "user" | "admin" = "user") {
   return {
@@ -197,7 +197,7 @@ function makeCtx(userId = 1, role: "user" | "admin" = "user") {
   };
 }
 
-// ─── Projects CRUD Tests ──────────────────────────────────────────────────────
+// --- Projects CRUD Tests ------------------------------------------------------
 
 describe("projects.list", () => {
   it("returns projects for authenticated user", async () => {
@@ -314,7 +314,7 @@ describe("projects.getMembers", () => {
   });
 });
 
-// ─── Schedule Bidirectional Sync Tests ───────────────────────────────────────
+// --- Schedule Bidirectional Sync Tests ---------------------------------------
 
 describe("schedules.getDoors", () => {
   it("returns door schedule entries derived from IFC elements", async () => {

@@ -36,7 +36,7 @@ import { runFullComplianceCheck } from "./fbc-engine";
 import { parseIfcContent } from "./ifc-parser";
 import { storagePut } from "./storage";
 
-// ─── Auth Router ──────────────────────────────────────────────────────────────
+// --- Auth Router --------------------------------------------------------------
 
 const authRouter = router({
   me: publicProcedure.query((opts) => opts.ctx.user),
@@ -47,7 +47,7 @@ const authRouter = router({
   }),
 });
 
-// ─── Projects Router ──────────────────────────────────────────────────────────
+// --- Projects Router ----------------------------------------------------------
 
 const projectsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -162,7 +162,7 @@ const projectsRouter = router({
     }),
 });
 
-// ─── IFC Router ───────────────────────────────────────────────────────────────
+// --- IFC Router ---------------------------------------------------------------
 
 const ifcRouter = router({
   getFiles: protectedProcedure
@@ -300,7 +300,7 @@ const ifcRouter = router({
 
 });
 
-// ─── Compliance Router ────────────────────────────────────────────────────────
+// --- Compliance Router --------------------------------------------------------
 
 const complianceRouter = router({
   runCheck: protectedProcedure
@@ -353,7 +353,7 @@ const complianceRouter = router({
     }),
 });
 
-// ─── Schedules Router ─────────────────────────────────────────────────────────
+// --- Schedules Router ---------------------------------------------------------
 
 const schedulesRouter = router({
   getDoors: protectedProcedure
@@ -445,7 +445,7 @@ const schedulesRouter = router({
     }),
 });
 
-// ─── AI Router ────────────────────────────────────────────────────────────────
+// --- AI Router ----------------------------------------------------------------
 
 const aiRouter = router({
   getMessages: protectedProcedure
@@ -496,6 +496,16 @@ const aiRouter = router({
 ## YOUR CORE DIRECTIVE
 When a user describes a building, room, or element — YOU IMMEDIATELY GENERATE IT. You NEVER ask clarifying questions. You make smart professional assumptions for everything not specified and note your assumptions in the "message" field. Act like a senior architect who can sketch a full floor plan from a napkin description.
 
+## MANDATORY COMPLETENESS RULE
+Every building generation MUST include ALL of these element types — no exceptions:
+1. IfcSlab — foundation slab (full footprint, positionZ=0)
+2. IfcWall — ALL exterior walls (4 minimum) + ALL interior partition walls
+3. IfcDoor — entry door + bedroom doors + bathroom doors (minimum 1 per room)
+4. IfcWindow — windows on ALL exterior walls (minimum 2 per exterior wall)
+5. IfcRoof — roof slab covering full footprint (positionZ = wall height)
+
+If you generate ONLY walls without slabs, doors, windows, and roof — that is WRONG. A 1200 sqft 2-bed 2-bath house should have approximately 25-35 elements total.
+
 ## SMART DEFAULTS (use when not specified)
 - Exterior walls: 0.15m thick, 2.74m height (9ft) for R-3 residential
 - Interior walls: 0.114m thick, 2.44m height (8ft)
@@ -510,15 +520,17 @@ When a user describes a building, room, or element — YOU IMMEDIATELY GENERATE 
 ## BUILDING GENERATION RULES
 When asked to generate a building or floor plan:
 1. Calculate a logical rectangular footprint from the total square footage (1 sqft = 0.0929 sqm)
-2. Place the foundation slab first (full footprint, positionZ=0)
-3. Lay out 4 exterior walls as a closed perimeter
-4. Add interior partition walls dividing the space into rooms
-5. Place doors on every room (entry door on south/front wall at positionX=1.0)
-6. Place windows on exterior walls (min 8% of floor area per FBC R303.1)
-7. Add roof slab on top (positionZ = wall height)
+2. FIRST: Place the foundation slab (full footprint, positionZ=0, depth=0.15)
+3. SECOND: Lay out 4 exterior walls as a closed perimeter
+4. THIRD: Add interior partition walls dividing the space into rooms
+5. FOURTH: Place doors on EVERY room — entry door on south wall, bedroom doors, bathroom doors
+6. FIFTH: Place windows on ALL exterior walls — at least 2 per wall, sill height 0.91m
+7. SIXTH: Add roof slab on top (positionZ = wall height, full footprint, depth=0.20)
 8. ALL coordinates in METERS. Origin (0,0,0) = SW corner at slab level
 9. X = East, Y = North, Z = Up
 10. positionX/Y/Z = SW bottom corner of element
+11. For a 1200 sqft 2-bed 2-bath: expect ~1 slab + 4 ext walls + 6-8 int walls + 5-6 doors + 8-10 windows + 1 roof = ~25-30 elements
+12. NEVER return a response with only walls — always include slab, doors, windows, and roof
 
 ## CURRENT PROJECT CONTEXT
 - County: ${project.county ?? "Lee County (assumed)"}
@@ -722,11 +734,163 @@ CRITICAL: NEVER say "I need more information" or "please provide" — just build
     }),
 });
 
-// ─── Blender 3D Router ─────────────────────────────────────────────────────────
+// --- Blender 3D Router ---------------------------------------------------------
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+
+// Detect Blender binary path across dev and production environments
+function findBlender(): string | null {
+  const candidates = [
+    "blender",
+    "/usr/bin/blender",
+    "/usr/local/bin/blender",
+    "/snap/bin/blender",
+    "/opt/blender/blender",
+    "/app/blender/blender",
+  ];
+  for (const candidate of candidates) {
+    try {
+      execSync(`${candidate} --version`, { timeout: 5000, stdio: "pipe" });
+      return candidate;
+    } catch {
+      // not found at this path
+    }
+  }
+  return null;
+}
+
+// Generate a minimal valid GLB (GLTF binary) from element data without Blender
+// This is a pure-JS fallback that creates a proper GLB file with box meshes
+function generateProceduralGLB(elements: Array<{
+  id: number; ifcClass: string; name: string;
+  posX: number; posY: number; posZ: number;
+  width: number; height: number; depth: number;
+  rotation: number;
+}>): Buffer {
+  // Build a GLTF 2.0 JSON with box meshes for each element
+  const ELEMENT_COLORS: Record<string, number[]> = {
+    IfcWall: [0.75, 0.72, 0.68, 1.0],
+    IfcSlab: [0.55, 0.55, 0.55, 1.0],
+    IfcRoof: [0.45, 0.35, 0.28, 1.0],
+    IfcDoor: [0.55, 0.38, 0.22, 1.0],
+    IfcWindow: [0.45, 0.72, 0.88, 0.7],
+    IfcColumn: [0.62, 0.62, 0.62, 1.0],
+    IfcBeam: [0.50, 0.50, 0.50, 1.0],
+    IfcOpeningElement: [0.80, 0.80, 0.80, 0.3],
+  };
+
+  // Box geometry: 8 vertices, 12 triangles (36 indices)
+  // Unit cube centered at origin: x,y,z in [-0.5, 0.5]
+  const BOX_POSITIONS = new Float32Array([
+    -0.5,-0.5,-0.5,  0.5,-0.5,-0.5,  0.5, 0.5,-0.5, -0.5, 0.5,-0.5,
+    -0.5,-0.5, 0.5,  0.5,-0.5, 0.5,  0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+  ]);
+  const BOX_INDICES = new Uint16Array([
+    0,1,2, 0,2,3,  4,6,5, 4,7,6,
+    0,4,5, 0,5,1,  2,6,7, 2,7,3,
+    0,3,7, 0,7,4,  1,5,6, 1,6,2,
+  ]);
+
+  const posBytes = Buffer.from(BOX_POSITIONS.buffer);
+  const idxBytes = Buffer.from(BOX_INDICES.buffer);
+
+  const bufferViews: object[] = [];
+  const accessors: object[] = [];
+  const meshes: object[] = [];
+  const nodes: number[] = [];
+  const materials: object[] = [];
+  const bufferChunks: Buffer[] = [];
+  let byteOffset = 0;
+
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i]!;
+    const color = ELEMENT_COLORS[el.ifcClass] ?? [0.7, 0.7, 0.7, 1.0];
+
+    // Material
+    const matIdx = materials.length;
+    materials.push({
+      name: el.ifcClass,
+      pbrMetallicRoughness: {
+        baseColorFactor: color,
+        metallicFactor: 0.0,
+        roughnessFactor: 0.85,
+      },
+      alphaMode: (color[3] ?? 1.0) < 1.0 ? "BLEND" : "OPAQUE",
+    });
+
+    // Position buffer view
+    const posView = bufferViews.length;
+    bufferViews.push({ buffer: 0, byteOffset, byteLength: posBytes.length, target: 34962 });
+    bufferChunks.push(posBytes);
+    byteOffset += posBytes.length;
+
+    // Index buffer view
+    const idxView = bufferViews.length;
+    bufferViews.push({ buffer: 0, byteOffset, byteLength: idxBytes.length, target: 34963 });
+    bufferChunks.push(idxBytes);
+    byteOffset += idxBytes.length;
+
+    // Accessors
+    const posAcc = accessors.length;
+    accessors.push({ bufferView: posView, componentType: 5126, count: 8, type: "VEC3",
+      min: [-0.5,-0.5,-0.5], max: [0.5,0.5,0.5] });
+    const idxAcc = accessors.length;
+    accessors.push({ bufferView: idxView, componentType: 5123, count: 36, type: "SCALAR" });
+
+    // Mesh
+    const meshIdx = meshes.length;
+    meshes.push({ name: el.name, primitives: [{ attributes: { POSITION: posAcc }, indices: idxAcc, material: matIdx }] });
+
+    // Node with scale = element dimensions, translation = position
+    nodes.push(meshIdx);
+  }
+
+  const nodeObjects = elements.map((el, i) => ({
+    name: el.name,
+    mesh: i,
+    translation: [el.posX, el.posZ, -el.posY], // Y-up for GLTF
+    scale: [Math.max(el.width, 0.05), Math.max(el.height, 0.05), Math.max(el.depth, 0.05)],
+    rotation: [0, Math.sin(el.rotation / 2), 0, Math.cos(el.rotation / 2)],
+  }));
+
+  const binBuffer = Buffer.concat(bufferChunks);
+
+  const gltfJson = {
+    asset: { version: "2.0", generator: "Elevations by Sourcy" },
+    scene: 0,
+    scenes: [{ nodes: elements.map((_, i) => i) }],
+    nodes: nodeObjects,
+    meshes,
+    materials,
+    accessors,
+    bufferViews,
+    buffers: [{ byteLength: binBuffer.length }],
+  };
+
+  const jsonStr = JSON.stringify(gltfJson);
+  // Pad JSON to 4-byte boundary
+  const jsonPadded = jsonStr.padEnd(Math.ceil(jsonStr.length / 4) * 4, " ");
+  const jsonBytes = Buffer.from(jsonPadded, "utf8");
+
+  // GLB header: magic, version, total length
+  const totalLen = 12 + 8 + jsonBytes.length + 8 + binBuffer.length;
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546C67, 0); // magic: glTF
+  header.writeUInt32LE(2, 4);           // version: 2
+  header.writeUInt32LE(totalLen, 8);
+
+  const jsonChunkHeader = Buffer.alloc(8);
+  jsonChunkHeader.writeUInt32LE(jsonBytes.length, 0);
+  jsonChunkHeader.writeUInt32LE(0x4E4F534A, 4); // JSON
+
+  const binChunkHeader = Buffer.alloc(8);
+  binChunkHeader.writeUInt32LE(binBuffer.length, 0);
+  binChunkHeader.writeUInt32LE(0x004E4942, 4); // BIN
+
+  return Buffer.concat([header, jsonChunkHeader, jsonBytes, binChunkHeader, binBuffer]);
+}
 
 const blenderRouter = router({
   generateGLB: protectedProcedure
@@ -741,11 +905,10 @@ const blenderRouter = router({
       if (!elements || elements.length === 0)
         throw new TRPCError({ code: "BAD_REQUEST", message: "No elements to render" });
 
-      // Build element JSON for Blender
       const elemData = elements.map((e) => ({
         id: e.id,
         ifcClass: e.ifcClass,
-        name: e.name,
+        name: e.name ?? e.ifcClass,
         posX: e.positionX ?? 0,
         posY: e.positionY ?? 0,
         posZ: e.positionZ ?? 0,
@@ -755,43 +918,47 @@ const blenderRouter = router({
         rotation: 0,
       }));
 
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "elev-blender-"));
-      const inputJson = path.join(tmpDir, "elements.json");
-      const outputObj = path.join(tmpDir, "model.obj");
-      const outputGlb = path.join(tmpDir, "model.glb");
+      const blenderBin = findBlender();
+      let glbBuffer: Buffer;
+      let renderMethod: string;
 
-      fs.writeFileSync(inputJson, JSON.stringify({ projectName: project?.name ?? "Model", elements: elemData }));
-
-      const scriptPath = path.join(process.cwd(), "server", "blender_ifc_to_glb.py");
-
-      try {
-        // Run Blender headless to generate OBJ
-        execSync(
-          `blender --background --python "${scriptPath}" -- "${inputJson}" "${outputObj}"`,
-          { timeout: 120000, stdio: "pipe" }
-        );
-
-        // Convert OBJ to GLB using obj2gltf
-        execSync(`obj2gltf -i "${outputObj}" -o "${outputGlb}"`, { timeout: 30000, stdio: "pipe" });
-
-        // Upload GLB to S3
-        const glbBuffer = fs.readFileSync(outputGlb);
-        const key = `glb/${input.projectId}-${Date.now()}.glb`;
-        const { url } = await storagePut(key, glbBuffer, "model/gltf-binary");
-
-        // Cleanup
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-
-        return { url, elementCount: elements.length };
-      } catch (err: unknown) {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Blender render failed: ${msg.slice(0, 200)}` });
+      if (blenderBin) {
+        // --- Blender path ---
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "elev-blender-"));
+        const inputJson = path.join(tmpDir, "elements.json");
+        const outputObj = path.join(tmpDir, "model.obj");
+        const outputGlb = path.join(tmpDir, "model.glb");
+        fs.writeFileSync(inputJson, JSON.stringify({ projectName: project?.name ?? "Model", elements: elemData }));
+        const scriptPath = path.join(process.cwd(), "server", "blender_ifc_to_glb.py");
+        try {
+          execSync(
+            `${blenderBin} --background --python "${scriptPath}" -- "${inputJson}" "${outputObj}"`,
+            { timeout: 120000, stdio: "pipe" }
+          );
+          execSync(`obj2gltf -i "${outputObj}" -o "${outputGlb}"`, { timeout: 30000, stdio: "pipe" });
+          glbBuffer = fs.readFileSync(outputGlb);
+          renderMethod = "blender";
+        } catch {
+          // Blender failed — fall through to procedural
+          glbBuffer = generateProceduralGLB(elemData);
+          renderMethod = "procedural-fallback";
+        } finally {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      } else {
+        // --- Procedural fallback (no Blender in this environment) ---
+        glbBuffer = generateProceduralGLB(elemData);
+        renderMethod = "procedural";
       }
+
+      const key = `glb/${input.projectId}-${Date.now()}.glb`;
+      const { url } = await storagePut(key, glbBuffer, "model/gltf-binary");
+
+      return { url, elementCount: elements.length, renderMethod };
     }),
 });
 
-// ─── App Router ───────────────────────────────────────────────────────────────
+// --- App Router ---------------------------------------------------------------
 export const appRouter = router({
   system: systemRouter,
   auth: authRouter,

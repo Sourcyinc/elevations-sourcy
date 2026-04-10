@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { checkElement, checkProjectMetadata, runFullComplianceCheck } from "./fbc-engine";
 import type { IfcElement, Project } from "../drizzle/schema";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -56,7 +56,7 @@ function makeElement(overrides: Partial<IfcElement> = {}): IfcElement {
   };
 }
 
-// ─── Project Metadata Checks ──────────────────────────────────────────────────
+// --- Project Metadata Checks --------------------------------------------------
 
 describe("checkProjectMetadata", () => {
   it("returns no flags for a fully configured project", () => {
@@ -104,7 +104,7 @@ describe("checkProjectMetadata", () => {
   });
 });
 
-// ─── Wall Checks ──────────────────────────────────────────────────────────────
+// --- Wall Checks --------------------------------------------------------------
 
 describe("checkElement - IfcWall", () => {
   it("passes a wall with adequate height", () => {
@@ -148,7 +148,7 @@ describe("checkElement - IfcWall", () => {
   });
 });
 
-// ─── Slab Checks ─────────────────────────────────────────────────────────────
+// --- Slab Checks -------------------------------------------------------------
 
 describe("checkElement - IfcSlab", () => {
   it("flags slab below 4 in thickness (FBC R506.1)", () => {
@@ -185,7 +185,7 @@ describe("checkElement - IfcSlab", () => {
   });
 });
 
-// ─── Door Checks ─────────────────────────────────────────────────────────────
+// --- Door Checks -------------------------------------------------------------
 
 describe("checkElement - IfcDoor", () => {
   it("flags door below 32 in width (FBC R311.2)", () => {
@@ -257,7 +257,7 @@ describe("checkElement - IfcDoor", () => {
   });
 });
 
-// ─── Full Run ─────────────────────────────────────────────────────────────────
+// --- Full Run -----------------------------------------------------------------
 
 describe("runFullComplianceCheck", () => {
   it("aggregates project and element flags", () => {

@@ -101,6 +101,9 @@
 - [x] Only flag FBC-critical info (flood zone, HVHZ) as codeFlag warnings, never as blockers
 
 ## Bug Fixes
+- [x] Fix: Blender not found in production — added findBlender() dynamic path detection + generateProceduralGLB() pure-JS fallback
+- [x] Fix: AI generates only walls — added MANDATORY COMPLETENESS RULE to system prompt, enforcing all 5 element types
+- [x] Add: generateProceduralGLB() pure-JS GLB generator with PBR materials, color-coded by IFC class
 - [x] Fix: project_members insert fails on project creation — fixed insertId extraction from MySQL2 result tuple (result[0].insertId instead of result.insertId)
 
 ## Testing

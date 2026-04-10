@@ -29,7 +29,7 @@ function getNum(pset: Record<string, unknown>, key: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-// ─── Project-level checks ─────────────────────────────────────────────────────
+// --- Project-level checks -----------------------------------------------------
 
 export function checkProjectMetadata(project: Project): ComplianceFlag[] {
   const flags: ComplianceFlag[] = [];
@@ -84,7 +84,7 @@ export function checkProjectMetadata(project: Project): ComplianceFlag[] {
   return flags;
 }
 
-// ─── Element-level checks ─────────────────────────────────────────────────────
+// --- Element-level checks -----------------------------------------------------
 
 export function checkElement(element: IfcElement, project: Project): ComplianceFlag[] {
   const flags: ComplianceFlag[] = [];
@@ -303,7 +303,7 @@ function checkOpening(element: IfcElement, project: Project): ComplianceFlag[] {
   return flags;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 
 function getCountyFreeboard(county: string): number {
   const freeboards: Record<string, number> = {
@@ -319,7 +319,7 @@ function getCountyFreeboard(county: string): number {
   return freeboards[county] ?? 0.0;
 }
 
-// ─── Full project compliance run ──────────────────────────────────────────────
+// --- Full project compliance run ----------------------------------------------
 
 export function runFullComplianceCheck(project: Project, elements: IfcElement[]): ComplianceFlag[] {
   const flags: ComplianceFlag[] = [];

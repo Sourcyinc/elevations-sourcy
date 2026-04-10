@@ -37,7 +37,7 @@ export async function getDb() {
   return _db;
 }
 
-// ─── Users ────────────────────────────────────────────────────────────────────
+// --- Users --------------------------------------------------------------------
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
@@ -86,7 +86,7 @@ export async function getUserById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// ─── Projects ─────────────────────────────────────────────────────────────────
+// --- Projects -----------------------------------------------------------------
 
 export async function getProjectsByUserId(userId: number): Promise<Project[]> {
   const db = await getDb();
@@ -158,7 +158,7 @@ export async function isProjectMember(projectId: number, userId: number): Promis
   return result.length > 0;
 }
 
-// ─── IFC Files ────────────────────────────────────────────────────────────────
+// --- IFC Files ----------------------------------------------------------------
 
 export async function createIfcFile(data: Omit<IfcFile, "id" | "createdAt">) {
   const db = await getDb();
@@ -187,7 +187,7 @@ export async function updateIfcFile(id: number, data: Partial<IfcFile>) {
   await db.update(ifcFiles).set(data).where(eq(ifcFiles.id, id));
 }
 
-// ─── IFC Elements ─────────────────────────────────────────────────────────────
+// --- IFC Elements -------------------------------------------------------------
 
 export async function createIfcElement(data: InsertIfcElement) {
   const db = await getDb();
@@ -228,7 +228,7 @@ export async function deleteIfcElementsByFileId(ifcFileId: number) {
   await db.delete(ifcElements).where(eq(ifcElements.ifcFileId, ifcFileId));
 }
 
-// ─── FBC Rules ────────────────────────────────────────────────────────────────
+// --- FBC Rules ----------------------------------------------------------------
 
 export async function getFbcRules() {
   const db = await getDb();
@@ -245,7 +245,7 @@ export async function getCountyRequirements(county?: string) {
   return db.select().from(countyRequirements);
 }
 
-// ─── Compliance Checks ────────────────────────────────────────────────────────
+// --- Compliance Checks --------------------------------------------------------
 
 export async function createComplianceCheck(data: Omit<ComplianceCheck, "id" | "createdAt">) {
   const db = await getDb();
@@ -269,7 +269,7 @@ export async function clearComplianceChecks(projectId: number) {
   await db.delete(complianceChecks).where(eq(complianceChecks.projectId, projectId));
 }
 
-// ─── AI Sessions ──────────────────────────────────────────────────────────────
+// --- AI Sessions --------------------------------------------------------------
 
 export async function createAiSession(data: Omit<AiSession, "id" | "createdAt" | "resolvedAt">) {
   const db = await getDb();
@@ -292,7 +292,7 @@ export async function updateAiSession(id: number, data: Partial<AiSession>) {
   await db.update(aiSessions).set(data).where(eq(aiSessions.id, id));
 }
 
-// ─── Chat Messages ────────────────────────────────────────────────────────────
+// --- Chat Messages ------------------------------------------------------------
 
 export async function saveChatMessage(data: Omit<ChatMessage, "id" | "createdAt">) {
   const db = await getDb();

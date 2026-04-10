@@ -9,7 +9,7 @@ import { countyRequirements, fbcRules } from "../drizzle/schema";
 async function seed() {
   const db = drizzle(process.env.DATABASE_URL!);
 
-  // ─── FBC Rules (2023 8th Edition) ─────────────────────────────────────────
+  // --- FBC Rules (2023 8th Edition) -----------------------------------------
 
   const rules = [
     // Ceiling Heights
@@ -60,7 +60,7 @@ async function seed() {
   }
   console.log(`Seeded ${rules.length} FBC rules.`);
 
-  // ─── County Requirements ───────────────────────────────────────────────────
+  // --- County Requirements ---------------------------------------------------
 
   const counties = [
     {
