@@ -60,6 +60,16 @@
 - [x] Error boundaries and empty states
 - [x] Toast notifications
 
+## Landing Page (Marketing)
+- [x] Hero section: headline, subheadline, dual CTA (Login + Start Free Trial)
+- [x] Feature highlights section: 6 key features with icons and descriptions
+- [x] FBC compliance section: county coverage map/list and rule categories
+- [x] How it works section: 4-step workflow
+- [x] Pricing section: 3 tiers (Starter/Free, Professional $79/mo, Enterprise) with feature comparison
+- [x] Testimonials/social proof section (3 Florida AEC professionals)
+- [x] Footer with links, Sourcy brand, and legal disclaimer
+- [x] Authenticated users redirected to dashboard automatically
+
 ## Testing
 - [x] Vitest: auth.logout procedure
 - [x] Vitest: FBC compliance engine (21 tests — all passing)
