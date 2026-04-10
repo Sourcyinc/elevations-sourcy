@@ -18,6 +18,7 @@ import {
   Loader2,
   MessageSquare,
   RotateCcw,
+  Zap,
   Send,
   Shield,
   X,
@@ -576,16 +577,18 @@ function ComplianceSidebar({ projectId }: { projectId: number }) {
 
 // ─── AI Chat Panel ────────────────────────────────────────────────────────────
 
-function AIChatPanel({ projectId, onElementsAdded }: { projectId: number; onElementsAdded: () => void }) {
+function AIChatPanel({ projectId, onElementsAdded, elementCount }: { projectId: number; onElementsAdded: () => void; elementCount: number }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content:
-        "Hello! I'm the Elevations AI assistant. I can help you create IFC elements, check FBC compliance, and answer questions about your Florida building project. All model changes will appear as a ghost preview for your professional review before being committed.",
+        "I'm ELEV, your BIM architect. Describe any building and I'll generate the full model immediately — no back-and-forth. Try: \"1200 sqft 2bed 2bath single story\" or \"Add a 3-car garage to the north side\".",
     },
   ]);
   const [input, setInput] = useState("");
   const [pendingSession, setPendingSession] = useState<number | null>(null);
+  const [showIntake, setShowIntake] = useState(elementCount === 0);
+  const [intake, setIntake] = useState({ sqft: "", beds: "2", baths: "2", stories: "1", buildingType: "Single Family Residential", extras: "" });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const chat = trpc.ai.chat.useMutation({
@@ -635,10 +638,12 @@ function AIChatPanel({ projectId, onElementsAdded }: { projectId: number; onElem
   };
 
   const QUICK_PROMPTS = [
-    "Add a 36-inch impact door for Zone AE",
-    "Check flood compliance for this project",
-    "Add 4 exterior walls for a 30x40 ft house",
-    "What NOA requirements apply here?",
+    "Add a 3-car garage on the north side",
+    "Add a covered lanai 20x12 ft on the rear",
+    "Check flood and wind compliance",
+    "Add impact windows throughout",
+    "Add a second story master suite",
+    "Add a pool deck with screen enclosure",
   ];
 
   return (
@@ -738,8 +743,101 @@ function AIChatPanel({ projectId, onElementsAdded }: { projectId: number; onElem
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick prompts */}
-      {messages.length <= 1 && (
+      {/* Quick-start intake form — shown when model is empty */}
+      {showIntake && messages.length <= 1 && (
+        <div className="mx-3 mb-2 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-primary">Quick-Start: Generate Full Building</span>
+            <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setShowIntake(false)}>Skip</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Building Type</label>
+              <select
+                className="w-full text-xs bg-input border border-border rounded px-2 py-1.5 text-foreground"
+                value={intake.buildingType}
+                onChange={(e) => setIntake((p) => ({ ...p, buildingType: e.target.value }))}
+              >
+                <option>Single Family Residential</option>
+                <option>Duplex</option>
+                <option>Townhouse</option>
+                <option>Commercial Office</option>
+                <option>Retail</option>
+                <option>Warehouse</option>
+                <option>Mixed Use</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Total Sq Ft *</label>
+              <input
+                type="number"
+                placeholder="e.g. 1200"
+                className="w-full text-xs bg-input border border-border rounded px-2 py-1.5 text-foreground"
+                value={intake.sqft}
+                onChange={(e) => setIntake((p) => ({ ...p, sqft: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Bedrooms</label>
+              <select
+                className="w-full text-xs bg-input border border-border rounded px-2 py-1.5 text-foreground"
+                value={intake.beds}
+                onChange={(e) => setIntake((p) => ({ ...p, beds: e.target.value }))}
+              >
+                {["1","2","3","4","5","6"].map((n) => <option key={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Bathrooms</label>
+              <select
+                className="w-full text-xs bg-input border border-border rounded px-2 py-1.5 text-foreground"
+                value={intake.baths}
+                onChange={(e) => setIntake((p) => ({ ...p, baths: e.target.value }))}
+              >
+                {["1","1.5","2","2.5","3","3.5","4"].map((n) => <option key={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Stories</label>
+              <select
+                className="w-full text-xs bg-input border border-border rounded px-2 py-1.5 text-foreground"
+                value={intake.stories}
+                onChange={(e) => setIntake((p) => ({ ...p, stories: e.target.value }))}
+              >
+                {["1","2","3"].map((n) => <option key={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Special Features</label>
+              <input
+                type="text"
+                placeholder="e.g. open kitchen, 3-car garage"
+                className="w-full text-xs bg-input border border-border rounded px-2 py-1.5 text-foreground"
+                value={intake.extras}
+                onChange={(e) => setIntake((p) => ({ ...p, extras: e.target.value }))}
+              />
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="w-full h-8 text-xs gap-1.5"
+            disabled={!intake.sqft || chat.isPending}
+            onClick={() => {
+              const prompt = `Generate a complete ${intake.buildingType} building: ${intake.sqft} sq ft, ${intake.beds} bedroom${parseInt(intake.beds) !== 1 ? 's' : ''}, ${intake.baths} bathroom${parseFloat(intake.baths) !== 1 ? 's' : ''}, ${intake.stories} ${parseInt(intake.stories) !== 1 ? 'stories' : 'story'}${intake.extras ? ', ' + intake.extras : ''}. Generate the full floor plan with all walls, slabs, doors, windows, and roof now.`;
+              const userMsg: ChatMessage = { role: "user", content: prompt };
+              setMessages((prev) => [...prev, userMsg]);
+              chat.mutate({ projectId, message: prompt });
+              setShowIntake(false);
+            }}
+          >
+            <Zap className="w-3 h-3" />
+            Generate Full Building Now
+          </Button>
+        </div>
+      )}
+
+      {/* Quick prompts — shown when no intake form */}
+      {!showIntake && messages.length <= 1 && (
         <div className="px-3 pb-2 flex flex-wrap gap-1.5">
           {QUICK_PROMPTS.map((p) => (
             <button
@@ -1155,7 +1253,7 @@ export default function Viewer() {
             <>
               {rightPanel === "compliance" && <ComplianceSidebar projectId={projectId} />}
               {rightPanel === "ai" && (
-                <AIChatPanel projectId={projectId} onElementsAdded={() => refetchElements()} />
+                <AIChatPanel projectId={projectId} onElementsAdded={() => refetchElements()} elementCount={typedElements.length} />
               )}
               {rightPanel === "schedules" && <SchedulesPanel projectId={projectId} />}
             </>

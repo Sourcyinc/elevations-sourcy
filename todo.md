@@ -70,6 +70,13 @@
 - [x] Footer with links, Sourcy brand, and legal disclaimer
 - [x] Authenticated users redirected to dashboard automatically
 
+## AI Overhaul
+- [x] Redesign AI system prompt: act as proactive BIM architect, generate full models immediately, never ask questions
+- [x] Add smart defaults engine: standard room dimensions, ceiling heights, wall thickness, door/window sizes by building type
+- [x] Add building generation mode: parse natural language description → generate complete floor plan with all elements
+- [x] Add structured quick-start intake form: collect building type, sqft, stories, county, flood zone upfront in one shot
+- [x] Only flag FBC-critical info (flood zone, HVHZ) as codeFlag warnings, never as blockers
+
 ## Bug Fixes
 - [x] Fix: project_members insert fails on project creation — fixed insertId extraction from MySQL2 result tuple (result[0].insertId instead of result.insertId)
 
