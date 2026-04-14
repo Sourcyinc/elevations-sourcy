@@ -159,6 +159,40 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      // Mock next.js modules used by @pascal-app/editor
+      "next/image": path.resolve(import.meta.dirname, "client", "src", "mocks", "next-image.tsx"),
+      "next/link": path.resolve(import.meta.dirname, "client", "src", "mocks", "next-link.tsx"),
+    },
+  },
+  define: {
+    // Pascal editor uses process.env.NEXT_PUBLIC_ASSETS_CDN_URL to resolve asset paths
+    'process.env.NEXT_PUBLIC_ASSETS_CDN_URL': JSON.stringify('https://editor.pascal.app'),
+  },
+  optimizeDeps: {
+    include: [
+      '@pascal-app/core',
+      '@pascal-app/viewer',
+      'motion',
+      'motion/react',
+      'zundo',
+      'zustand',
+      'howler',
+      'mitt',
+      '@iconify/react',
+      '@number-flow/react',
+      'three',
+      'three/webgpu',
+      '@react-three/fiber',
+      '@react-three/drei',
+      'three-mesh-bvh',
+      'three-bvh-csg',
+      'polygon-clipping',
+      'idb-keyval',
+      'dedent',
+    ],
+    esbuildOptions: {
+      // Allow 'use client' directive in node_modules
+      define: { 'process.env.NODE_ENV': '"development"' },
     },
   },
   envDir: path.resolve(import.meta.dirname),

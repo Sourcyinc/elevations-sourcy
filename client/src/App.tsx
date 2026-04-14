@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import ProjectDetail from "./pages/ProjectDetail";
 import Viewer from "./pages/Viewer";
+import PascalViewer from "./pages/PascalViewer";
 import PermitSet from "./pages/PermitSet";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/projects/:id" component={ProjectDetail} />
       <Route path="/projects/:id/viewer" component={Viewer} />
+      <Route path="/projects/:id/bim" component={PascalViewer} />
       <Route path="/projects/:id/permit-set" component={PermitSet} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

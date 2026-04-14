@@ -70,6 +70,27 @@
 - [x] Footer with links, Sourcy brand, and legal disclaimer
 - [x] Authenticated users redirected to dashboard automatically
 
+## Pascal Editor Integration
+- [x] Install @pascal-app/core, @pascal-app/editor, @pascal-app/viewer from npm
+- [x] Build Pascal packages locally from source (monorepo) and link to project
+- [x] Configure Vite aliases for next/image and next/link mocks
+- [x] Add NEXT_PUBLIC_ASSETS_CDN_URL define to Vite config
+- [x] Create PNG icons for Pascal editor toolbar (23 icons)
+- [x] Add bim_scenes table to database schema
+- [x] Add getBimSceneByProject and upsertBimScene query helpers to db.ts
+- [x] Add bimRouter with getScene and saveScene tRPC procedures
+- [x] Create PascalViewer page: full-screen Editor component wrapping the Pascal editor
+- [x] Add custom FBC Compliance sidebar tab to Pascal editor sidebar
+- [x] Add custom AI Chat sidebar tab to Pascal editor sidebar
+- [x] Wire FBC engine to Pascal useScene store: read nodes on change, run checks, display violations
+- [x] Wire AI chat to Pascal useScene store: LLM output -> createNode/updateNode with ghost preview
+- [x] Save/load Pascal scene graph to database per project (JSON blob in S3)
+- [x] Update project dashboard: BIM Editor button navigates to PascalViewer with projectId
+- [x] Add PascalViewer route /projects/:id/bim alongside existing Viewer route
+- [x] Preserve: landing page, dashboard, project detail, FBC rules page, permit set page
+- [x] Vitest: FBC compliance engine in PascalViewer (10 tests — all passing)
+- [x] Vitest: BIM scene persistence helpers (2 tests — all passing)
+
 ## Headless Blender + Three.js 3D Viewer
 - [x] Install Blender headless on backend server (Blender 3.0.1 via apt)
 - [x] Write Blender Python script: IFC JSON → 3D mesh geometry → OBJ → GLB (via obj2gltf)

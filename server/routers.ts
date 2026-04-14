@@ -31,6 +31,8 @@ import {
   updateAiSession,
   updateIfcElement,
   updateProject,
+  getBimSceneByProject,
+  upsertBimScene,
 } from "./db";
 import { runFullComplianceCheck } from "./fbc-engine";
 import { parseIfcContent } from "./ifc-parser";
@@ -959,6 +961,44 @@ const blenderRouter = router({
 });
 
 // --- App Router ---------------------------------------------------------------
+// ─── BIM Router ───────────────────────────────────────────────────────────────
+const bimRouter = router({
+  getScene: protectedProcedure
+    .input(z.object({ projectId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const isMember = await isProjectMember(input.projectId, ctx.user.id);
+      const project = await getProjectById(input.projectId);
+      if (!isMember && project?.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+      const scene = await getBimSceneByProject(input.projectId);
+      if (!scene?.sceneGraphUrl) return null;
+      // Fetch the JSON from S3 and return it
+      const res = await fetch(scene.sceneGraphUrl);
+      if (!res.ok) return null;
+      return (await res.json()) as { nodes: Record<string, unknown>; rootNodeIds: string[] };
+    }),
+
+  saveScene: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.number(),
+        sceneGraph: z.object({
+          nodes: z.record(z.string(), z.unknown()),
+          rootNodeIds: z.array(z.string()),
+        }),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const isMember = await isProjectMember(input.projectId, ctx.user.id);
+      const project = await getProjectById(input.projectId);
+      if (!isMember && project?.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+      const key = `bim-scenes/${input.projectId}/scene.json`;
+      const jsonBuffer = Buffer.from(JSON.stringify(input.sceneGraph));
+      const { url } = await storagePut(key, jsonBuffer, "application/json");
+      await upsertBimScene(input.projectId, url, key);
+      return { ok: true };
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
@@ -968,6 +1008,7 @@ export const appRouter = router({
   compliance: complianceRouter,
   schedules: schedulesRouter,
   ai: aiRouter,
+  bim: bimRouter,
 });
 
 export type AppRouter = typeof appRouter;

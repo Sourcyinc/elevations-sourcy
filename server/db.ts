@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   AiSession,
+  BimScene,
   ChatMessage,
   ComplianceCheck,
   IfcElement,
@@ -11,6 +12,7 @@ import {
   Project,
   ProjectMember,
   aiSessions,
+  bimScenes,
   chatMessages,
   complianceChecks,
   countyRequirements,
@@ -308,4 +310,30 @@ export async function getChatMessages(projectId: number): Promise<ChatMessage[]>
     .from(chatMessages)
     .where(eq(chatMessages.projectId, projectId))
     .orderBy(chatMessages.createdAt);
+}
+
+// ─── BIM Scenes ───────────────────────────────────────────────────────────────
+export async function getBimSceneByProject(projectId: number): Promise<BimScene | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(bimScenes).where(eq(bimScenes.projectId, projectId)).limit(1);
+  return rows[0];
+}
+
+export async function upsertBimScene(
+  projectId: number,
+  sceneGraphUrl: string,
+  sceneGraphKey: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await getBimSceneByProject(projectId);
+  if (existing) {
+    await db
+      .update(bimScenes)
+      .set({ sceneGraphUrl, sceneGraphKey })
+      .where(eq(bimScenes.projectId, projectId));
+  } else {
+    await db.insert(bimScenes).values({ projectId, sceneGraphUrl, sceneGraphKey });
+  }
 }

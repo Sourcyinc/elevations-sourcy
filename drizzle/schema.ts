@@ -193,3 +193,15 @@ export const chatMessages = mysqlTable("chat_messages", {
 });
 
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// ─── BIM Scenes (Pascal Editor) ───────────────────────────────────────────────
+export const bimScenes = mysqlTable("bim_scenes", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull().unique(),
+  sceneGraphUrl: text("sceneGraphUrl"), // S3 URL to the JSON scene graph
+  sceneGraphKey: varchar("sceneGraphKey", { length: 512 }), // S3 key
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BimScene = typeof bimScenes.$inferSelect;
+export type InsertBimScene = typeof bimScenes.$inferInsert;

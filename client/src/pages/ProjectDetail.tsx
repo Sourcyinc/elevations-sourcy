@@ -9,6 +9,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  Box,
   Building2,
   CheckCircle2,
   Download,
@@ -157,11 +158,20 @@ export default function ProjectDetail() {
             </Button>
             <Button
               size="sm"
+              variant="outline"
               onClick={() => navigate(`/projects/${projectId}/viewer`)}
               className="gap-2"
             >
               <Eye className="w-4 h-4" />
-              Open Viewer
+              IFC Viewer
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => navigate(`/projects/${projectId}/bim`)}
+              className="gap-2"
+            >
+              <Box className="w-4 h-4" />
+              BIM Editor
             </Button>
           </div>
         </div>
