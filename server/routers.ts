@@ -465,6 +465,19 @@ const aiRouter = router({
       z.object({
         projectId: z.number(),
         message: z.string().min(1),
+        // Live FBC violations from the Pascal scene (sent by PascalViewer)
+        fbcViolations: z
+          .array(
+            z.object({
+              code: z.string(),
+              severity: z.enum(["error", "warning", "info"]),
+              message: z.string(),
+              nodeType: z.string().optional(),
+            })
+          )
+          .optional(),
+        // Node type counts from the Pascal scene
+        sceneNodeCounts: z.record(z.string(), z.number()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -551,7 +564,14 @@ When asked to generate a building or floor plan:
 - FBC R311: Egress — every bedroom needs egress window or door
 - FBC 1612: In AE/VE zones, lowest floor ≥BFE+0.3m freeboard
 - FBC R602/R603: HVHZ — impact-rated openings required (NOA)
-
+## LIVE FBC VIOLATIONS FROM PASCAL BIM MODEL
+${input.fbcViolations && input.fbcViolations.length > 0
+  ? input.fbcViolations.map((v) => `- [${v.severity.toUpperCase()}] ${v.code}: ${v.message}${v.nodeType ? ` (${v.nodeType} element)` : ""}`).join("\n")
+  : "- No violations detected in current model — all checks passing."}
+## PASCAL SCENE NODE COUNTS
+${input.sceneNodeCounts && Object.keys(input.sceneNodeCounts).length > 0
+  ? Object.entries(input.sceneNodeCounts).map(([t, c]) => `- ${c}x ${t}`).join("\n")
+  : "- Empty scene — no elements placed yet."}
 ## RESPONSE FORMAT — always return this exact JSON:
 {
   "message": "Confident description of what you built and what assumptions you made",
@@ -975,6 +995,84 @@ const bimRouter = router({
       const res = await fetch(scene.sceneGraphUrl);
       if (!res.ok) return null;
       return (await res.json()) as { nodes: Record<string, unknown>; rootNodeIds: string[] };
+    }),
+
+  getSceneForPermit: protectedProcedure
+    .input(z.object({ projectId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const isMember = await isProjectMember(input.projectId, ctx.user.id);
+      const project = await getProjectById(input.projectId);
+      if (!isMember && project?.ownerId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+      const scene = await getBimSceneByProject(input.projectId);
+      if (!scene?.sceneGraphUrl) return null;
+      const res = await fetch(scene.sceneGraphUrl);
+      if (!res.ok) return null;
+      const sceneGraph = (await res.json()) as { nodes: Record<string, Record<string, unknown>>; rootNodeIds: string[] };
+      const nodes = Object.values(sceneGraph.nodes);
+
+      // Extract structured permit data from the scene graph
+      const walls = nodes.filter((n) => n.type === "wall");
+      const slabs = nodes.filter((n) => n.type === "slab");
+      const doors = nodes.filter((n) => n.type === "door");
+      const windows = nodes.filter((n) => n.type === "window");
+      const levels = nodes.filter((n) => n.type === "level");
+      const roofSegments = nodes.filter((n) => n.type === "roof-segment");
+      const zones = nodes.filter((n) => n.type === "zone");
+
+      // Compute lowest floor elevation from slabs
+      const slabElevations = slabs
+        .map((s) => (typeof s.elevation === "number" ? s.elevation : null))
+        .filter((e): e is number => e !== null);
+      const lowestFloorElevation = slabElevations.length > 0 ? Math.min(...slabElevations) : null;
+
+      // Compute total floor area from zones (in m²)
+      const totalAreaM2 = zones.reduce((sum, z) => {
+        const area = typeof z.area === "number" ? z.area : 0;
+        return sum + area;
+      }, 0);
+      const totalAreaSqft = Math.round(totalAreaM2 * 10.764);
+
+      // Compute ceiling height from levels
+      const ceilingHeights = levels
+        .map((l) => (typeof l.height === "number" ? l.height : null))
+        .filter((h): h is number => h !== null);
+      const avgCeilingHeightM = ceilingHeights.length > 0
+        ? ceilingHeights.reduce((a, b) => a + b, 0) / ceilingHeights.length
+        : null;
+      const avgCeilingHeightFt = avgCeilingHeightM !== null ? Math.round(avgCeilingHeightM * 3.281 * 10) / 10 : null;
+
+      // Compute roof pitch from roof segments
+      const pitches = roofSegments
+        .map((r) => (typeof r.pitch === "number" ? r.pitch : null))
+        .filter((p): p is number => p !== null);
+      const avgPitch = pitches.length > 0 ? Math.round(pitches.reduce((a, b) => a + b, 0) / pitches.length * 10) / 10 : null;
+
+      return {
+        // Element counts
+        wallCount: walls.length,
+        slabCount: slabs.length,
+        doorCount: doors.length,
+        windowCount: windows.length,
+        levelCount: levels.length,
+        roofSegmentCount: roofSegments.length,
+        zoneCount: zones.length,
+        totalNodeCount: nodes.length,
+        // Elevation data
+        lowestFloorElevationM: lowestFloorElevation,
+        lowestFloorElevationFt: lowestFloorElevation !== null ? Math.round(lowestFloorElevation * 3.281 * 100) / 100 : null,
+        // Area data
+        totalAreaM2: Math.round(totalAreaM2 * 100) / 100,
+        totalAreaSqft,
+        // Ceiling height
+        avgCeilingHeightM,
+        avgCeilingHeightFt,
+        // Roof
+        avgRoofPitchDeg: avgPitch,
+        // Level names
+        levelNames: levels.map((l) => (typeof l.name === "string" ? l.name : "Level")).filter(Boolean),
+        // Scene metadata
+        sceneUpdatedAt: scene.updatedAt,
+      };
     }),
 
   saveScene: protectedProcedure

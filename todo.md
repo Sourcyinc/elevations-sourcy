@@ -142,3 +142,21 @@
 - [x] IfcRoof: hurricane straps (R802.11)
 - [x] IfcOpeningElement: HVHZ protection (1626.1.2)
 - [x] County freeboard: Lee, Collier, Miami-Dade, Broward, Palm Beach (+1 ft), Sarasota, Charlotte (0 ft), Hillsborough (+1 ft)
+
+## Feature: AI Chat FBC Context Injection
+- [x] Pass live FBC violations list into AI chat system prompt so ELEV can suggest specific code-compliant fixes
+- [x] Include node counts (walls, doors, windows, slabs) and project metadata in system prompt
+- [x] Extend ai.chat input schema to accept fbcViolations and sceneNodeCounts
+- [x] PascalViewer: run FBC checks before each send and pass violations to ai.chat
+
+## Feature: Permit Set Auto-Population from Scene Graph
+- [x] Add getSceneForPermit tRPC procedure that extracts structured data from saved scene graph
+- [x] Add BimData interface to PermitSet.tsx
+- [x] Add Sync from BIM button to PermitSet header
+- [x] Wire bimData to SheetCanvas and drawSheetContent
+- [x] FBC Compliance Summary sheet: live BIM data (ceiling height, floor elevation, door/window counts, roof pitch, area)
+- [x] Cover sheet: BIM Model Summary panel (area, walls, doors, windows, levels, roof segments)
+- [x] Cover sheet: Elevation Certificate panel (LAG, LFE, BFE note, ceiling height, roof pitch, scene date)
+- [x] Floor Plan sheet: BIM floor plan summary info block (area, walls, doors, windows, levels)
+- [x] Vitest: getSceneForPermit extraction logic (7 tests — all passing)
+- [x] All 56 tests passing

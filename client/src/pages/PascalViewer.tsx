@@ -233,18 +233,26 @@ function AIChatPanel({ projectId }: { projectId: number }) {
     setInput("");
     setIsLoading(true);
 
-    // Get scene summary for context
+    // Get scene summary and live FBC violations for context
     const sceneNodes = useScene.getState().nodes;
     const nodeTypes = Object.values(sceneNodes as Record<string, { type: string }>)
       .map((n) => n.type)
       .filter(Boolean);
-    const typeCounts = nodeTypes.reduce<Record<string, number>>((acc, t) => {
+    const sceneNodeCounts = nodeTypes.reduce<Record<string, number>>((acc, t) => {
       acc[t] = (acc[t] ?? 0) + 1;
       return acc;
     }, {});
-    const sceneSummary = Object.entries(typeCounts)
-      .map(([t, c]) => `${c} ${t}${c > 1 ? "s" : ""}`)
-      .join(", ");
+
+    // Run FBC checks to get live violations for the system prompt
+    const fbcResult = runFBCChecks(sceneNodes as Record<string, unknown>);
+    const fbcViolations = fbcResult.violations
+      .filter((v) => v.severity !== "info")
+      .map((v) => ({
+        code: v.code,
+        severity: v.severity as "error" | "warning",
+        message: v.message,
+        nodeType: v.nodeType,
+      }));
 
     setMessages((prev) => [
       ...prev,
@@ -254,9 +262,9 @@ function AIChatPanel({ projectId }: { projectId: number }) {
 
     aiMutation.mutate({
       projectId,
-      message: sceneSummary
-        ? `${userMsg}\n\n[Scene context: ${sceneSummary}]`
-        : userMsg,
+      message: userMsg,
+      fbcViolations,
+      sceneNodeCounts,
     });
   };
 

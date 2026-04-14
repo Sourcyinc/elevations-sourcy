@@ -19,6 +19,7 @@ import {
   Loader2,
   Plus,
   Printer,
+  RefreshCw,
   Save,
   Settings,
   Upload,
@@ -59,6 +60,26 @@ interface Sheet {
   title: string;
   type: "floor-plan" | "site-plan" | "elevation" | "detail" | "compliance" | "cover";
   sheetNumber: string;
+}
+
+interface BimData {
+  wallCount: number;
+  slabCount: number;
+  doorCount: number;
+  windowCount: number;
+  levelCount: number;
+  roofSegmentCount: number;
+  zoneCount: number;
+  totalNodeCount: number;
+  lowestFloorElevationM: number | null;
+  lowestFloorElevationFt: number | null;
+  totalAreaM2: number;
+  totalAreaSqft: number;
+  avgCeilingHeightM: number | null;
+  avgCeilingHeightFt: number | null;
+  avgRoofPitchDeg: number | null;
+  levelNames: string[];
+  sceneUpdatedAt: Date | null;
 }
 
 const DEFAULT_SHEETS: Sheet[] = [
@@ -209,7 +230,8 @@ function drawSheetContent(
   w: number,
   h: number,
   sheet: Sheet,
-  tb: TitleBlock
+  tb: TitleBlock,
+  bimData?: BimData | null
 ) {
   const MARGIN = 24;
   const TB_HEIGHT = 164;
@@ -252,8 +274,8 @@ function drawSheetContent(
 
     ctx.textAlign = "left";
 
-    // Sheet index
-    const indexX = w / 2 - 120;
+    // Sheet index (left column)
+    const indexX = MARGIN + 30;
     let indexY = contentY + 260;
     ctx.fillStyle = "rgba(255,255,255,0.7)";
     ctx.font = "bold 10px Arial";
@@ -266,6 +288,68 @@ function drawSheetContent(
       ctx.font = "9px Arial";
       ctx.fillText(`${s.sheetNumber}  ${s.title}`, indexX + 14, indexY);
       indexY += 14;
+    });
+
+    // BIM Model Summary panel (right column) — populated from scene graph when synced
+    const panelX = w / 2 + 20;
+    const panelW = w / 2 - MARGIN - 40;
+    let panelY = contentY + 250;
+
+    // Panel header
+    ctx.fillStyle = "rgba(23,238,180,0.15)";
+    ctx.fillRect(panelX, panelY, panelW, 18);
+    ctx.fillStyle = "#17eeb4";
+    ctx.font = "bold 9px Arial";
+    ctx.fillText("BIM MODEL SUMMARY", panelX + 8, panelY + 12);
+    panelY += 24;
+
+    // Floor Plan Summary rows
+    const summaryRows: [string, string][] = [
+      ["Total Floor Area",    bimData ? `${bimData.totalAreaSqft.toLocaleString()} sqft (${bimData.totalAreaM2} m²)` : "— Sync BIM model"],
+      ["Walls",               bimData ? `${bimData.wallCount}` : "—"],
+      ["Doors",               bimData ? `${bimData.doorCount}` : "—"],
+      ["Windows",             bimData ? `${bimData.windowCount}` : "—"],
+      ["Levels / Floors",     bimData ? `${bimData.levelCount} (${bimData.levelNames.slice(0,3).join(", ") || "—"})` : "—"],
+      ["Roof Segments",       bimData ? `${bimData.roofSegmentCount}` : "—"],
+    ];
+    summaryRows.forEach(([label, value]) => {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "8px Arial";
+      ctx.fillText(label, panelX + 8, panelY);
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = "bold 8px Arial";
+      ctx.fillText(value, panelX + panelW / 2, panelY);
+      panelY += 13;
+    });
+
+    // Elevation Certificate sub-header
+    panelY += 6;
+    ctx.fillStyle = "rgba(33,148,242,0.15)";
+    ctx.fillRect(panelX, panelY, panelW, 18);
+    ctx.fillStyle = "#2194f2";
+    ctx.font = "bold 9px Arial";
+    ctx.fillText("ELEVATION CERTIFICATE DATA", panelX + 8, panelY + 12);
+    panelY += 24;
+
+    const lowestFt = bimData?.lowestFloorElevationFt;
+    const ceilFt   = bimData?.avgCeilingHeightFt;
+    const pitchDeg = bimData?.avgRoofPitchDeg;
+    const elevRows: [string, string][] = [
+      ["Lowest Adjacent Grade (LAG)", lowestFt != null ? `${lowestFt} ft NAVD` : "— Sync BIM model"],
+      ["Lowest Floor Elevation (LFE)", lowestFt != null ? `${lowestFt} ft NAVD` : "—"],
+      ["BFE (from project settings)", tb.county ? `See project metadata` : "—"],
+      ["Avg Ceiling Height",           ceilFt  != null ? `${ceilFt} ft` : "—"],
+      ["Avg Roof Pitch",               pitchDeg != null ? `${pitchDeg}°` : "—"],
+      ["Scene Last Updated",           bimData?.sceneUpdatedAt ? new Date(bimData.sceneUpdatedAt).toLocaleDateString() : "—"],
+    ];
+    elevRows.forEach(([label, value]) => {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "8px Arial";
+      ctx.fillText(label, panelX + 8, panelY);
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = "bold 8px Arial";
+      ctx.fillText(value, panelX + panelW / 2, panelY);
+      panelY += 13;
     });
 
   } else if (sheet.type === "floor-plan") {
@@ -286,6 +370,34 @@ function drawSheetContent(
     ctx.fillStyle = "#9ca3af";
     ctx.fillText("Generated from BIM model — use Viewer to export geometry", w / 2, contentY + 50);
     ctx.textAlign = "left";
+
+    // BIM floor plan summary (bottom-left info block)
+    if (bimData) {
+      const fpX = MARGIN + 20;
+      let fpY = contentY + contentH - 90;
+      ctx.fillStyle = "rgba(0,0,0,0.06)";
+      ctx.fillRect(fpX - 4, fpY - 12, 200, 80);
+      ctx.fillStyle = "#374151";
+      ctx.font = "bold 8px Arial";
+      ctx.fillText("FLOOR PLAN SUMMARY (FROM BIM)", fpX, fpY);
+      fpY += 14;
+      const fpRows: [string, string][] = [
+        ["Total Area",   `${bimData.totalAreaSqft.toLocaleString()} sqft`],
+        ["Walls",        `${bimData.wallCount}`],
+        ["Doors",        `${bimData.doorCount}`],
+        ["Windows",      `${bimData.windowCount}`],
+        ["Levels",       `${bimData.levelCount} (${bimData.levelNames.slice(0,2).join(", ") || "—"})`],
+      ];
+      fpRows.forEach(([lbl, val]) => {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "7px Arial";
+        ctx.fillText(lbl, fpX, fpY);
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 7px Arial";
+        ctx.fillText(val, fpX + 80, fpY);
+        fpY += 11;
+      });
+    }
 
     // North arrow
     const nx = w - MARGIN - 50, ny = contentY + 50;
@@ -398,16 +510,28 @@ function drawSheetContent(
     ctx.font = "bold 14px Arial";
     ctx.fillText("FBC 2023 · 8TH EDITION COMPLIANCE SUMMARY", MARGIN + 20, contentY + 30);
 
+    // Build compliance rows from live BIM data where available
+    const ceilH = bimData?.avgCeilingHeightFt;
+    const ceilStatus = ceilH == null ? "— No model data" : ceilH >= 7 ? `✓ ${ceilH} ft (req ≥ 7 ft)` : `✗ ${ceilH} ft (req ≥ 7 ft)`;
+    const lowestFloor = bimData?.lowestFloorElevationFt;
+    const floorStatus = lowestFloor == null ? "— No model data" : lowestFloor >= 0 ? `✓ ${lowestFloor} ft NAVD` : `✗ ${lowestFloor} ft NAVD (below grade)`;
+    const doorCount = bimData?.doorCount ?? 0;
+    const doorStatus = bimData == null ? "— No model data" : doorCount >= 1 ? `✓ ${doorCount} door(s) modeled` : `✗ No doors modeled`;
+    const windowCount = bimData?.windowCount ?? 0;
+    const windowStatus = bimData == null ? "— No model data" : windowCount >= 1 ? `✓ ${windowCount} window(s) modeled` : `✗ No windows modeled`;
+    const pitch = bimData?.avgRoofPitchDeg;
+    const pitchStatus = pitch == null ? "— No model data" : pitch >= 14 ? `✓ ${pitch}° avg (req ≥ 14°)` : `✗ ${pitch}° avg (req ≥ 14°)`;
+    const areaLabel = bimData ? `${bimData.totalAreaSqft.toLocaleString()} sqft (${bimData.totalAreaM2} m²)` : "— No model data";
     const rows = [
-      ["FBC Section", "Requirement", "Project Value", "Status"],
-      ["R301.2.1", `Wind Speed (${tb.county || "County"})`, "185 mph", "✓ COMPLIANT"],
-      ["R322.1", "Flood Zone Classification", "Zone AE", "✓ COMPLIANT"],
-      ["R322.2", "Lowest Floor Elevation", "BFE + 1 ft freeboard", "✓ COMPLIANT"],
-      ["R305.1", "Ceiling Height (Habitable)", "≥ 7 ft - 0 in", "✓ COMPLIANT"],
-      ["R311.2", "Egress Door Width", "≥ 3 ft - 0 in", "✓ COMPLIANT"],
-      ["R311.7.1", "Stair Width", "≥ 3 ft - 0 in", "✓ COMPLIANT"],
-      ["R403.1", "Footing Width", "≥ 12 in", "✓ COMPLIANT"],
-      ["R404.1", "Slab Thickness", "≥ 4 in", "✓ COMPLIANT"],
+      ["FBC Section", "Requirement", "Project Value / BIM Data", "Status"],
+      ["R301.2.1", `Wind Speed (${tb.county || "County"})`, "Per ASCE 7 / FBC Table", "— Verify with engineer"],
+      ["R322.1", "Flood Zone Classification", "Per FEMA FIRM", "— Verify with surveyor"],
+      ["R322.2", "Lowest Floor Elevation", lowestFloor != null ? `${lowestFloor} ft NAVD` : "N/A", floorStatus],
+      ["R305.1", "Ceiling Height (Habitable)", ceilH != null ? `${ceilH} ft avg` : "N/A", ceilStatus],
+      ["R311.2", "Egress Door Count", doorCount > 0 ? `${doorCount} door(s)` : "0", doorStatus],
+      ["R303.1", "Window Count", windowCount > 0 ? `${windowCount} window(s)` : "0", windowStatus],
+      ["R802.4", "Roof Pitch", pitch != null ? `${pitch}° avg` : "N/A", pitchStatus],
+      ["R302.1", "Floor Area", areaLabel, bimData ? "✓ Computed from model" : "— No model data"],
     ];
 
     const colW = [120, 220, 160, 120];
@@ -434,8 +558,11 @@ function drawSheetContent(
 
     ctx.font = "8px Arial";
     ctx.fillStyle = "#6b7280";
-    ctx.fillText("This compliance summary is based on project metadata and BIM model data. Field verification required.", MARGIN + 20, ty + 20);
-    ctx.fillText("This document does not constitute an engineering certification. Licensed professional review required.", MARGIN + 20, ty + 32);
+    const syncNote = bimData
+      ? `BIM model synced — ${bimData.totalNodeCount} elements (${bimData.wallCount}W / ${bimData.slabCount}S / ${bimData.doorCount}D / ${bimData.windowCount}Win / ${bimData.roofSegmentCount}R). Field verification required.`
+      : "No BIM model synced — values shown are placeholders. Open the BIM Editor and sync to populate.";
+    ctx.fillText(syncNote, MARGIN + 20, ty + 20);
+    ctx.fillText("This compliance summary does not constitute an engineering certification. Licensed professional review required.", MARGIN + 20, ty + 32);
   }
 }
 
@@ -445,10 +572,12 @@ function SheetCanvas({
   sheet,
   titleBlock,
   logoImg,
+  bimData,
 }: {
   sheet: Sheet;
   titleBlock: TitleBlock;
   logoImg: HTMLImageElement | null;
+  bimData?: BimData | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -465,9 +594,9 @@ function SheetCanvas({
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, W, H);
 
-    drawSheetContent(ctx, W, H, sheet, titleBlock);
+    drawSheetContent(ctx, W, H, sheet, titleBlock, bimData);
     drawTitleBlock(ctx, W, H, titleBlock, sheet, logoImg);
-  }, [sheet, titleBlock, logoImg]);
+  }, [sheet, titleBlock, logoImg, bimData]);
 
   return (
     <canvas
@@ -501,6 +630,27 @@ export default function PermitSet() {
     { id: projectId },
     { enabled: isAuthenticated && projectId > 0 }
   );
+
+  const { data: bimSceneData, isLoading: isBimLoading, refetch: refetchBim } = trpc.bim.getSceneForPermit.useQuery(
+    { projectId },
+    { enabled: isAuthenticated && projectId > 0 }
+  );
+
+  const [bimData, setBimData] = useState<BimData | null>(null);
+  const [bimSynced, setBimSynced] = useState(false);
+
+  const handleSyncFromBim = async () => {
+    const result = await refetchBim();
+    if (result.data) {
+      setBimData(result.data as BimData);
+      setBimSynced(true);
+      toast.success(
+        `BIM model synced — ${(result.data as BimData).totalNodeCount} elements loaded into permit sheets`
+      );
+    } else {
+      toast.error("No BIM model found. Open the BIM Editor and place some elements first.");
+    }
+  };
 
   const [titleBlock, setTitleBlock] = useState<TitleBlock>({
     projectName: "",
@@ -601,6 +751,19 @@ export default function PermitSet() {
         </span>
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={handleSyncFromBim}
+            disabled={isBimLoading}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all"
+            style={{
+              background: bimSynced ? "rgba(23,238,180,0.12)" : "rgba(255,255,255,0.06)",
+              border: `1px solid ${bimSynced ? "rgba(23,238,180,0.4)" : "rgba(255,255,255,0.12)"}`,
+              color: bimSynced ? "#17eeb4" : "rgba(255,255,255,0.7)",
+            }}
+          >
+            {isBimLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {bimSynced ? "BIM Synced" : "Sync from BIM"}
+          </button>
           <button
             onClick={() => setShowTitleBlockEditor(true)}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all"
@@ -750,6 +913,7 @@ export default function PermitSet() {
                 sheet={currentSheet}
                 titleBlock={{ ...titleBlock, sheetNumber: currentSheet.sheetNumber, sheetTitle: currentSheet.title }}
                 logoImg={logoImg}
+                bimData={bimData}
               />
             )}
           </div>

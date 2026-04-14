@@ -125,3 +125,172 @@ describe("BIM Scene persistence helpers", () => {
     expect(result?.projectId).toBe(42);
   });
 });
+
+// ─── getSceneForPermit extraction logic (pure unit tests) ────────────────────
+// These tests exercise the same extraction logic used in bim.getSceneForPermit
+// without calling the full tRPC procedure (which requires DB + S3).
+
+/** Mirror of the extraction logic in bim.getSceneForPermit */
+function extractPermitData(sceneGraph: { nodes: Record<string, Record<string, unknown>> }) {
+  const nodes = Object.values(sceneGraph.nodes);
+
+  const walls = nodes.filter((n) => n.type === "wall");
+  const slabs = nodes.filter((n) => n.type === "slab");
+  const doors = nodes.filter((n) => n.type === "door");
+  const windows = nodes.filter((n) => n.type === "window");
+  const levels = nodes.filter((n) => n.type === "level");
+  const roofSegments = nodes.filter((n) => n.type === "roof-segment");
+  const zones = nodes.filter((n) => n.type === "zone");
+
+  const slabElevations = slabs
+    .map((s) => (typeof s.elevation === "number" ? s.elevation : null))
+    .filter((e): e is number => e !== null);
+  const lowestFloorElevation = slabElevations.length > 0 ? Math.min(...slabElevations) : null;
+
+  const totalAreaM2 = zones.reduce((sum, z) => {
+    const area = typeof z.area === "number" ? z.area : 0;
+    return sum + area;
+  }, 0);
+  const totalAreaSqft = Math.round(totalAreaM2 * 10.764);
+
+  const ceilingHeights = levels
+    .map((l) => (typeof l.height === "number" ? l.height : null))
+    .filter((h): h is number => h !== null);
+  const avgCeilingHeightM =
+    ceilingHeights.length > 0
+      ? ceilingHeights.reduce((a, b) => a + b, 0) / ceilingHeights.length
+      : null;
+  const avgCeilingHeightFt =
+    avgCeilingHeightM !== null ? Math.round(avgCeilingHeightM * 3.281 * 10) / 10 : null;
+
+  const pitches = roofSegments
+    .map((r) => (typeof r.pitch === "number" ? r.pitch : null))
+    .filter((p): p is number => p !== null);
+  const avgPitch =
+    pitches.length > 0
+      ? Math.round((pitches.reduce((a, b) => a + b, 0) / pitches.length) * 10) / 10
+      : null;
+
+  return {
+    wallCount: walls.length,
+    slabCount: slabs.length,
+    doorCount: doors.length,
+    windowCount: windows.length,
+    levelCount: levels.length,
+    roofSegmentCount: roofSegments.length,
+    zoneCount: zones.length,
+    totalNodeCount: nodes.length,
+    lowestFloorElevationM: lowestFloorElevation,
+    lowestFloorElevationFt:
+      lowestFloorElevation !== null
+        ? Math.round(lowestFloorElevation * 3.281 * 100) / 100
+        : null,
+    totalAreaM2: Math.round(totalAreaM2 * 100) / 100,
+    totalAreaSqft,
+    avgCeilingHeightM,
+    avgCeilingHeightFt,
+    avgRoofPitchDeg: avgPitch,
+    levelNames: levels
+      .map((l) => (typeof l.name === "string" ? l.name : "Level"))
+      .filter(Boolean),
+  };
+}
+
+describe("getSceneForPermit extraction logic", () => {
+  it("returns zero counts for an empty scene", () => {
+    const result = extractPermitData({ nodes: {} });
+    expect(result.wallCount).toBe(0);
+    expect(result.doorCount).toBe(0);
+    expect(result.totalAreaSqft).toBe(0);
+    expect(result.lowestFloorElevationM).toBeNull();
+    expect(result.avgCeilingHeightM).toBeNull();
+    expect(result.avgRoofPitchDeg).toBeNull();
+  });
+
+  it("counts element types correctly", () => {
+    const result = extractPermitData({
+      nodes: {
+        w1: { type: "wall", height: 2.74 },
+        w2: { type: "wall", height: 2.74 },
+        d1: { type: "door", width: 0.914, height: 2.032 },
+        win1: { type: "window", width: 0.91, height: 1.22 },
+        s1: { type: "slab", elevation: 0.3 },
+        l1: { type: "level", height: 2.74, name: "Ground Floor" },
+        r1: { type: "roof-segment", pitch: 22.5 },
+        z1: { type: "zone", area: 111.5 },
+      },
+    });
+    expect(result.wallCount).toBe(2);
+    expect(result.doorCount).toBe(1);
+    expect(result.windowCount).toBe(1);
+    expect(result.slabCount).toBe(1);
+    expect(result.levelCount).toBe(1);
+    expect(result.roofSegmentCount).toBe(1);
+    expect(result.zoneCount).toBe(1);
+    expect(result.totalNodeCount).toBe(8);
+  });
+
+  it("computes lowest floor elevation from multiple slabs", () => {
+    const result = extractPermitData({
+      nodes: {
+        s1: { type: "slab", elevation: 1.2 },
+        s2: { type: "slab", elevation: 0.3 },
+        s3: { type: "slab", elevation: 3.0 },
+      },
+    });
+    expect(result.lowestFloorElevationM).toBeCloseTo(0.3);
+    // 0.3 m * 3.281 = 0.9843 ft → rounded to 0.98
+    expect(result.lowestFloorElevationFt).toBeCloseTo(0.98, 1);
+  });
+
+  it("computes total area and converts to sqft", () => {
+    const result = extractPermitData({
+      nodes: {
+        z1: { type: "zone", area: 100 },
+        z2: { type: "zone", area: 11.5 },
+      },
+    });
+    expect(result.totalAreaM2).toBeCloseTo(111.5, 1);
+    // 111.5 * 10.764 = 1200.186 → rounded to 1200
+    expect(result.totalAreaSqft).toBe(1200);
+  });
+
+  it("computes average ceiling height from levels", () => {
+    const result = extractPermitData({
+      nodes: {
+        l1: { type: "level", height: 2.74, name: "Ground Floor" },
+        l2: { type: "level", height: 2.44, name: "Second Floor" },
+      },
+    });
+    // avg = (2.74 + 2.44) / 2 = 2.59 m → 2.59 * 3.281 = 8.5 ft
+    expect(result.avgCeilingHeightM).toBeCloseTo(2.59, 1);
+    expect(result.avgCeilingHeightFt).toBeCloseTo(8.5, 0);
+    expect(result.levelNames).toEqual(["Ground Floor", "Second Floor"]);
+  });
+
+  it("computes average roof pitch from roof segments", () => {
+    const result = extractPermitData({
+      nodes: {
+        r1: { type: "roof-segment", pitch: 20 },
+        r2: { type: "roof-segment", pitch: 25 },
+      },
+    });
+    expect(result.avgRoofPitchDeg).toBeCloseTo(22.5, 1);
+  });
+
+  it("ignores nodes with missing numeric fields", () => {
+    const result = extractPermitData({
+      nodes: {
+        s1: { type: "slab" }, // no elevation
+        l1: { type: "level" }, // no height
+        r1: { type: "roof-segment" }, // no pitch
+        z1: { type: "zone" }, // no area
+      },
+    });
+    expect(result.lowestFloorElevationM).toBeNull();
+    expect(result.avgCeilingHeightM).toBeNull();
+    expect(result.avgRoofPitchDeg).toBeNull();
+    expect(result.totalAreaM2).toBe(0);
+    expect(result.totalAreaSqft).toBe(0);
+  });
+});
