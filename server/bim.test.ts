@@ -294,3 +294,200 @@ describe("getSceneForPermit extraction logic", () => {
     expect(result.totalAreaSqft).toBe(0);
   });
 });
+
+// ─── BuildingNode.fbc-aware FBC checks (Task A1) ─────────────────────────────
+// These tests verify that the FBC engine reads BuildingNode.metadata.fbc and
+// uses the typed fields (bfe, floodZone, hvhz, windSpeed, windExposure) to
+// produce enhanced compliance checks.
+
+describe("FBC Engine — BuildingNode.fbc-aware checks", () => {
+  it("returns buildingFbc in the result when a building node has fbc metadata", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: {
+          fbc: {
+            county: "Miami-Dade",
+            hvhz: true,
+            windSpeed: 185,
+            windExposure: "D",
+            floodZone: "VE",
+            bfe: 12,
+          },
+        },
+      },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    expect(result.buildingFbc.county).toBe("Miami-Dade");
+    expect(result.buildingFbc.hvhz).toBe(true);
+    expect(result.buildingFbc.windSpeed).toBe(185);
+    expect(result.buildingFbc.bfe).toBe(12);
+  });
+
+  it("flags HVHZ windows with NOA notice (FBC 1609.4)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { hvhz: true } },
+      },
+      win1: { id: "win1", type: "window", width: 0.91, height: 1.22 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const hvhzWindowNotice = result.violations.find((v) => v.id === "win1-window-hvhz");
+    expect(hvhzWindowNotice).toBeDefined();
+    expect(hvhzWindowNotice?.severity).toBe("info");
+    expect(hvhzWindowNotice?.code).toContain("HVHZ");
+  });
+
+  it("flags HVHZ roofs with NOA notice (FBC 1609.4)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { hvhz: true } },
+      },
+      roof1: { id: "roof1", type: "roof-segment", wallHeight: 2.74, roofHeight: 1.2 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const hvhzRoofNotice = result.violations.find((v) => v.id === "roof1-roof-hvhz");
+    expect(hvhzRoofNotice).toBeDefined();
+    expect(hvhzRoofNotice?.severity).toBe("info");
+    expect(hvhzRoofNotice?.code).toContain("HVHZ");
+  });
+
+  it("does NOT add HVHZ notices when hvhz is false", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { hvhz: false } },
+      },
+      win1: { id: "win1", type: "window", width: 0.91, height: 1.22 },
+      roof1: { id: "roof1", type: "roof-segment", wallHeight: 2.74, roofHeight: 1.2 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const hvhzViolations = result.violations.filter((v) => v.code.includes("HVHZ"));
+    expect(hvhzViolations).toHaveLength(0);
+  });
+
+  it("errors when slab elevation is below BFE (FBC R322)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { bfe: 10, floodZone: "AE" } },
+      },
+      // 2.5 m * 3.281 = 8.2 ft — below BFE of 10 ft
+      slab1: { id: "slab1", type: "slab", elevation: 2.5 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const bfeViolation = result.violations.find((v) => v.id === "slab1-slab-bfe");
+    expect(bfeViolation).toBeDefined();
+    expect(bfeViolation?.severity).toBe("error");
+    expect(bfeViolation?.code).toBe("FBC R322");
+    expect(bfeViolation?.message).toContain("BFE 10");
+  });
+
+  it("passes when slab elevation is at or above BFE (FBC R322)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { bfe: 8, floodZone: "AE" } },
+      },
+      // 3.0 m * 3.281 = 9.84 ft — above BFE of 8 ft
+      slab1: { id: "slab1", type: "slab", elevation: 3.0 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const bfeViolation = result.violations.find((v) => v.id === "slab1-slab-bfe");
+    expect(bfeViolation).toBeUndefined();
+    expect(result.passCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("applies 1 ft V-zone freeboard when floodZone is VE (FBC R322)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        // BFE 10 ft + 1 ft freeboard = must be ≥ 11 ft
+        metadata: { fbc: { bfe: 10, floodZone: "VE" } },
+      },
+      // 3.2 m * 3.281 = 10.5 ft — above BFE but below BFE+freeboard
+      slab1: { id: "slab1", type: "slab", elevation: 3.2 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const bfeViolation = result.violations.find((v) => v.id === "slab1-slab-bfe");
+    expect(bfeViolation).toBeDefined();
+    expect(bfeViolation?.message).toContain("freeboard");
+  });
+
+  it("warns when windSpeed is set but windExposure is missing (FBC 1609.3)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { windSpeed: 160 } }, // no windExposure
+      },
+      wall1: { id: "wall1", type: "wall", height: 2.74 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const exposureWarning = result.violations.find((v) => v.id === "building-wind-exposure");
+    expect(exposureWarning).toBeDefined();
+    expect(exposureWarning?.severity).toBe("warning");
+    expect(exposureWarning?.code).toBe("FBC 1609.3");
+  });
+
+  it("passes wind exposure check when both windSpeed and windExposure are set", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { windSpeed: 160, windExposure: "D" } },
+      },
+      wall1: { id: "wall1", type: "wall", height: 2.74 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const exposureWarning = result.violations.find((v) => v.id === "building-wind-exposure");
+    expect(exposureWarning).toBeUndefined();
+  });
+
+  it("adds wind-borne debris region notice for windSpeed ≥ 130 mph (FBC 1609.4)", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { windSpeed: 150, windExposure: "C" } },
+      },
+      wall1: { id: "wall1", type: "wall", height: 2.74 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const debrisNotice = result.violations.find((v) => v.id === "building-wind-debris");
+    expect(debrisNotice).toBeDefined();
+    expect(debrisNotice?.severity).toBe("info");
+    expect(debrisNotice?.code).toBe("FBC 1609.4");
+  });
+
+  it("does NOT add wind-borne debris notice for windSpeed < 130 mph", () => {
+    const nodes = {
+      building1: {
+        id: "building1",
+        type: "building",
+        metadata: { fbc: { windSpeed: 120, windExposure: "B" } },
+      },
+      wall1: { id: "wall1", type: "wall", height: 2.74 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    const debrisNotice = result.violations.find((v) => v.id === "building-wind-debris");
+    expect(debrisNotice).toBeUndefined();
+  });
+
+  it("returns empty buildingFbc when no building node exists", () => {
+    const nodes = {
+      wall1: { id: "wall1", type: "wall", height: 2.74 },
+    };
+    const result = runFBCChecks(nodes as Record<string, unknown>);
+    expect(result.buildingFbc).toEqual({});
+  });
+});

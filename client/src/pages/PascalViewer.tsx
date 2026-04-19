@@ -30,6 +30,7 @@ function FBCCompliancePanel() {
     passCount: 0,
     warnCount: 0,
     errorCount: 0,
+    buildingFbc: {},
   });
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
 

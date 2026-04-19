@@ -160,3 +160,15 @@
 - [x] Floor Plan sheet: BIM floor plan summary info block (area, walls, doors, windows, levels)
 - [x] Vitest: getSceneForPermit extraction logic (7 tests — all passing)
 - [x] All 56 tests passing
+
+## Task A1 — BuildingNode.fbc Typed Fields
+- [x] Read Pascal BuildingNode schema to understand extension pattern
+- [x] Create shared FBC metadata type in client/src/lib/fbc-types.ts (15 typed fields: occupancyGroup, constructionType, sprinklered, grossArea, buildingHeight, stories, floodZone, bfe, ffe, hvhz, windSpeed, windExposure, riskCategory, county, jurisdiction)
+- [x] Extend BuildingNode metadata in PascalViewer to read/write fbc block (buildingFbc: {} in FBCCheckResult initializer)
+- [x] Update FBC compliance engine to read from BuildingNode.fbc when present (BFE comparison, V-zone freeboard, HVHZ NOA notices, wind exposure warning, wind-borne debris region notice)
+- [x] Add vitest for BuildingNode.fbc field extraction (12 new tests — 68 total passing)
+
+## Task A2 — WallNode.fbc Typed Fields (pending approval)
+- [ ] Create WallFbc interface in fbc-types.ts (fireRating, isExterior, isFirewall, isSmokeBarrier, ulAssembly, insulationR)
+- [ ] Update FBC engine to read WallFbc from WallNode.metadata.fbc for fire-rating checks
+- [ ] Add vitest for WallNode.fbc-aware fire-rating checks
